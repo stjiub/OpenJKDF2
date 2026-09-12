@@ -304,6 +304,155 @@ void std3D_AddRenderListLines(rdLine* lines, uint32_t num_lines)
     // Debug lines are not drawn by the GL 1.1 backend.
 }
 
+#ifdef TARGET_XBOX
+typedef struct
+{
+    float x, y, z, w;
+    float u, v;
+    float r, g, b, a;
+} std3D_ClipVertex;
+
+// Camera depth range in rdCache's unflipped vertex z, 1 / (depth * farPlane).
+typedef struct
+{
+    float qNear;
+    float qFar;
+} std3D_DepthRange;
+
+// Replicates default_v.glsl: maps a screen-space vertex through `mvp` and applies
+// the 1/(1-z) perspective-correct w, producing a clip-space position.
+//
+// With `depth`, z is rdCache's unflipped form (TARGET_RETRO_HOMEBREW). Its far
+// plane is too short for default_v.glsl's depth mapping, which would clip
+// everything nearer than 1 / farPlane, so depth is instead mapped linearly in
+// 1/w across the camera's near and far planes.
+static void std3D_ToClipSpace(const D3DVERTEX* v, const float* m, const std3D_DepthRange* depth, std3D_ClipVertex* out)
+{
+    float x = v->x, y = v->y, z = v->z;
+
+    float px = m[0]  * x + m[12];
+    float py = m[5]  * y + m[13];
+    float pz;
+    float denom;
+
+    if (depth) {
+        denom = z;
+        pz = 1.0f - 2.0f * (z - depth->qFar) / (depth->qNear - depth->qFar);
+    }
+    else {
+        if (rdCache_dword_865258 == 16)
+            z = 1.0f - z;
+        pz = m[10] * z + m[14];
+        denom = 1.0f - z;
+    }
+
+    // Avoid a divide-by-zero, but preserve the sign: a small *negative* denom means
+    // the vertex is past the camera plane (w should stay negative so GL clips it).
+    // Clamping it to +1e-6 would flip w positive and fling the vertex far in front,
+    // smearing a huge triangle across the screen for a frame as geometry crosses
+    // the camera plane (the modern shader has no guard and clips correctly).
+    if (denom < 1e-6f && denom > -1e-6f)
+        denom = (denom < 0.0f) ? -1e-6f : 1e-6f;
+    float w = 1.0f / denom;
+
+    out->x = px * w;
+    out->y = py * w;
+    out->z = pz * w;
+    out->w = w;
+    out->u = v->tu;
+    out->v = v->tv;
+    out->r = COMP_R(v->color);
+    out->g = COMP_G(v->color);
+    out->b = COMP_B(v->color);
+    out->a = COMP_A(v->color);
+}
+
+static float std3D_Lerp(float a, float b, float t)
+{
+    return a + (b - a) * t;
+}
+
+static void std3D_LerpClipVertex(const std3D_ClipVertex* a, const std3D_ClipVertex* b, float t, std3D_ClipVertex* out)
+{
+    out->x = std3D_Lerp(a->x, b->x, t);
+    out->y = std3D_Lerp(a->y, b->y, t);
+    out->z = std3D_Lerp(a->z, b->z, t);
+    out->w = std3D_Lerp(a->w, b->w, t);
+    out->u = std3D_Lerp(a->u, b->u, t);
+    out->v = std3D_Lerp(a->v, b->v, t);
+    out->r = std3D_Lerp(a->r, b->r, t);
+    out->g = std3D_Lerp(a->g, b->g, t);
+    out->b = std3D_Lerp(a->b, b->b, t);
+    out->a = std3D_Lerp(a->a, b->a, t);
+}
+
+// A triangle clipped by the six view-volume planes gains at most one vertex per plane.
+#define STD3D_CLIP_MAX_VERTICES (3 + 6)
+
+static float std3D_ClipPlaneDistance(const std3D_ClipVertex* v, int plane)
+{
+    switch (plane) {
+        case 0: return v->w + v->z;
+        case 1: return v->w - v->z;
+        case 2: return v->w + v->x;
+        case 3: return v->w - v->x;
+        case 4: return v->w + v->y;
+        default: return v->w - v->y;
+    }
+}
+
+// The NV2A doesn't clip against the view volume (it only has a guard band),
+// so vertices with w <= 0 project through the divide. Clip here so the result
+// matches desktop GL. Returns the new vertex count.
+static int std3D_ClipPolygon(std3D_ClipVertex poly[STD3D_CLIP_MAX_VERTICES], int n)
+{
+    std3D_ClipVertex tmp[STD3D_CLIP_MAX_VERTICES];
+
+    for (int plane = 0; plane < 6 && n >= 3; plane++) {
+        int m = 0;
+        for (int i = 0; i < n; i++) {
+            const std3D_ClipVertex* a = &poly[i];
+            const std3D_ClipVertex* b = &poly[(i + 1) % n];
+            float da = std3D_ClipPlaneDistance(a, plane);
+            float db = std3D_ClipPlaneDistance(b, plane);
+            if (da >= 0.0f)
+                tmp[m++] = *a;
+            if ((da >= 0.0f) != (db >= 0.0f))
+                std3D_LerpClipVertex(a, b, da / (da - db), &tmp[m++]);
+        }
+        memcpy(poly, tmp, m * sizeof(*tmp));
+        n = m;
+    }
+    return n;
+}
+
+static void std3D_EmitClipVertex(const std3D_ClipVertex* c, int textured)
+{
+    glColor4ub((uint8_t)c->r, (uint8_t)c->g, (uint8_t)c->b, (uint8_t)c->a);
+    if (textured)
+        glTexCoord2f(c->u, c->v);
+    glVertex4f(c->x, c->y, c->z, c->w);
+}
+
+static void std3D_DrawTri(const D3DVERTEX* v1, const D3DVERTEX* v2, const D3DVERTEX* v3, const float* m, const std3D_DepthRange* depth, int textured)
+{
+    std3D_ClipVertex poly[STD3D_CLIP_MAX_VERTICES];
+    std3D_ToClipSpace(v1, m, depth, &poly[0]);
+    std3D_ToClipSpace(v2, m, depth, &poly[1]);
+    std3D_ToClipSpace(v3, m, depth, &poly[2]);
+
+    int n = std3D_ClipPolygon(poly, 3);
+
+    glBegin(GL_TRIANGLES);
+    for (int i = 1; i + 1 < n; i++) {
+        std3D_EmitClipVertex(&poly[0], textured);
+        std3D_EmitClipVertex(&poly[i], textured);
+        std3D_EmitClipVertex(&poly[i + 1], textured);
+    }
+    glEnd();
+}
+
+#else
 // Replicates default_v.glsl: maps a screen-space vertex through `mvp` and applies
 // the 1/(1-z) perspective-correct w, then emits a clip-space glVertex4f.
 static void std3D_EmitVertex(const D3DVERTEX* v, const float* m, int textured)
@@ -329,6 +478,8 @@ static void std3D_EmitVertex(const D3DVERTEX* v, const float* m, int textured)
         glTexCoord2f(v->tu, v->tv);
     glVertex4f(px * w, py * w, pz * w, w);
 }
+
+#endif
 
 void std3D_DrawRenderList()
 {
@@ -357,6 +508,20 @@ void std3D_DrawRenderList()
     mvp[13] =  (internalHeight / 2.0f) * scaleY;   // -> +1
     mvp[14] = bPerspective ? -1.0f : 1.0f;
     mvp[15] = 1.0f;
+
+#ifdef TARGET_XBOX
+    // Half the near plane avoids clipping engine-clipped geometry due to rounding.
+    std3D_DepthRange depthRange;
+    const std3D_DepthRange* pDepth = NULL;
+    if (rdCache_dword_865258 == 16 && bPerspective && rdCamera_g_pCurCamera)
+    {
+        const rdClipFrustum* pFrustum = rdCamera_g_pCurCamera->pClipFrustum;
+        depthRange.qNear = 1.0f / (0.5f * pFrustum->nearPlane * pFrustum->farPlane);
+        depthRange.qFar  = 1.0f / (pFrustum->farPlane * pFrustum->farPlane);
+        pDepth = &depthRange;
+    }
+
+#endif
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -420,11 +585,15 @@ void std3D_DrawRenderList()
             lastFlags = flags;
         }
 
+#ifdef TARGET_XBOX
+        std3D_DrawTri(&verts[tris[j].v1], &verts[tris[j].v2], &verts[tris[j].v3], mvp, pDepth, textured);
+#else
         glBegin(GL_TRIANGLES);
         std3D_EmitVertex(&verts[tris[j].v1], mvp, textured);
         std3D_EmitVertex(&verts[tris[j].v2], mvp, textured);
         std3D_EmitVertex(&verts[tris[j].v3], mvp, textured);
         glEnd();
+#endif
     }
 
     glDisable(GL_TEXTURE_2D);
