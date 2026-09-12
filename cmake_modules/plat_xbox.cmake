@@ -15,6 +15,10 @@ macro(plat_initialize)
         message(WARNING "cxbe/extract-xiso not found; run `make tools` in ${NXDK_DIR}. "
                         "The .exe will build but won't be packaged into an XISO.")
     endif()
+    find_program(XBOX_LLVM_NM llvm-nm)
+    if(NOT XBOX_LLVM_NM)
+        message(WARNING "llvm-nm not found; skipping the check for calls to unimplemented nxdk functions.")
+    endif()
 
     add_definitions(-DPLAT_MISSING_WIN32)
     add_definitions(-DTARGET_XBOX)
@@ -93,9 +97,16 @@ macro(plat_link_and_package)
             file(COPY "${XBOX_DF2_DATA_DIR}/Episode/JK1.GOB" DESTINATION ${XBOX_XISO_DIR}/Episode)
         endif()
 
+        set(XBOX_CHECK_STUBS_CMD "")
+        if(XBOX_LLVM_NM)
+            set(XBOX_CHECK_STUBS_CMD COMMAND ${CMAKE_COMMAND} -DNXDK_DIR=${NXDK_DIR} -DNM=${XBOX_LLVM_NM}
+                -P ${PROJECT_SOURCE_DIR}/cmake_modules/xbox_check_stubs.cmake)
+        endif()
+
         set(XBOX_XBE_OUT ${XBOX_XISO_DIR}/default.xbe)
         add_custom_command(
             OUTPUT ${XBOX_XBE_OUT}
+            ${XBOX_CHECK_STUBS_CMD}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${XBOX_XISO_DIR}
             COMMAND ${CXBE} -OUT:${XBOX_XBE_OUT} -TITLE:"OpenJKDF2" $<TARGET_FILE:${BIN_NAME}>
             DEPENDS ${BIN_NAME}
