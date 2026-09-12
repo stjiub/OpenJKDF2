@@ -15,7 +15,7 @@
 #include <ctype.h>
 #endif
 
-#if defined(MACOS) || defined(LINUX) || defined(TARGET_TWL) || defined(TARGET_DREAMCAST)
+#if defined(MACOS) || defined(LINUX) || defined(TARGET_TWL) || defined(TARGET_DREAMCAST) || defined(TARGET_XBOX)
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -277,7 +277,7 @@ void jk_fatal();
 #else // WIN32_BLOBS
 char* _strcpy(char *dst, const char *src);
 int _memcmp(const void* str1, const void* str2, size_t count) PURE_FUNC;
-#if !defined(TARGET_TWL) && !defined(TARGET_DREAMCAST)
+#if !defined(TARGET_TWL) && !defined(TARGET_DREAMCAST) && !defined(TARGET_XBOX)
 void* _memset(void* ptr, int val, size_t num);
 #define _memset_inline _memset
 #else

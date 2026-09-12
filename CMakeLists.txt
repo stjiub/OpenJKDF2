@@ -37,10 +37,11 @@ set(PLAT_MSVC FALSE CACHE BOOL "Windows 64-bit MSVC")
 set(PLAT_ANDROID_ARM64 FALSE CACHE BOOL "Android AArch64")
 set(PLAT_TWL FALSE CACHE BOOL "Nintendo DSi")
 set(PLAT_DREAMCAST FALSE CACHE BOOL "Sega Dreamcast (KallistiOS)")
+set(PLAT_XBOX FALSE CACHE BOOL "Original Xbox (nxdk)")
 set(PLAT_AUTO FALSE CACHE BOOL "Target the host OS")
 
 # Set PLAT_AUTO if a platform isn't specifically selected
-if(NOT PLAT_LINUX_32 AND NOT PLAT_LINUX_64 AND NOT PLAT_MACOS AND NOT PLAT_MACOS_X86_64 AND NOT PLAT_IOS AND NOT PLAT_MINGW_X86_64 AND NOT PLAT_MINGW_X86_32 AND NOT PLAT_WASM AND NOT PLAT_HOOKS AND NOT PLAT_TWL AND NOT PLAT_DREAMCAST)
+if(NOT PLAT_LINUX_32 AND NOT PLAT_LINUX_64 AND NOT PLAT_MACOS AND NOT PLAT_MACOS_X86_64 AND NOT PLAT_IOS AND NOT PLAT_MINGW_X86_64 AND NOT PLAT_MINGW_X86_32 AND NOT PLAT_WASM AND NOT PLAT_HOOKS AND NOT PLAT_TWL AND NOT PLAT_DREAMCAST AND NOT PLAT_XBOX)
     set(PLAT_AUTO TRUE)
 endif()
 
@@ -67,6 +68,7 @@ set(TARGET_ANDROID FALSE)
 set(TARGET_ANDROID_ARM64 FALSE)
 set(TARGET_TWL FALSE)
 set(TARGET_DREAMCAST FALSE)
+set(TARGET_XBOX FALSE)
 set(TARGET_HOOKS FALSE)
 set(TARGET_NO_BLOBS FALSE)
 set(TARGET_CAN_JKGM FALSE)
@@ -157,6 +159,8 @@ elseif(PLAT_TWL)
     include(cmake_modules/plat_twl.cmake)
 elseif(PLAT_DREAMCAST)
     include(cmake_modules/plat_dreamcast.cmake)
+elseif(PLAT_XBOX)
+    include(cmake_modules/plat_xbox.cmake)
 else()
     message(FATAL_ERROR "Unknown platform! Cannot continue.")
 endif()
@@ -223,7 +227,7 @@ list(REMOVE_ITEM ENGINE_SOURCE_FILES ${PROJECT_SOURCE_DIR}/src/main.c)
 # rdZRaster.c are wholly gated on that define, so drop them from the TWL/DC build entirely
 # (rdActive.c stays — its _Startup is always compiled). engine_config.h keeps the define off there
 # regardless.
-if(TARGET_TWL OR TARGET_DREAMCAST)
+if(TARGET_TWL OR TARGET_DREAMCAST OR TARGET_XBOX)
     list(REMOVE_ITEM ENGINE_SOURCE_FILES
         ${PROJECT_SOURCE_DIR}/src/Raster/rdAFRaster.c
         ${PROJECT_SOURCE_DIR}/src/Raster/rdNRaster.c
@@ -231,7 +235,7 @@ if(TARGET_TWL OR TARGET_DREAMCAST)
 endif()
 
 # DroidWorks app layer (src/Dw/...) is desktop-only for now
-if(TARGET_TWL OR TARGET_DREAMCAST)
+if(TARGET_TWL OR TARGET_DREAMCAST OR TARGET_XBOX)
     file(GLOB DW_SRCS ${PROJECT_SOURCE_DIR}/src/Dw/*.c ${PROJECT_SOURCE_DIR}/src/Dw/*.cpp)
     if(DW_SRCS)
         list(REMOVE_ITEM ENGINE_SOURCE_FILES ${DW_SRCS})

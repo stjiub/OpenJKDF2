@@ -36,8 +36,11 @@ set(ZLIB_SHARED_LIBRARY_DIR ${ZLIB_ROOT}/lib)
 # then wants a `main` symbol zlib never provides -- unrelated to SDL3, just
 # wasted, broken work for output we never use there.
 set(ZLIB_EXTRA_CMAKE_ARGS)
-if(TARGET_WASM)
+if(TARGET_WASM OR TARGET_XBOX)
     set(ZLIB_EXTRA_CMAKE_ARGS -DZLIB_BUILD_SHARED=OFF)
+endif()
+if(TARGET_XBOX)
+    list(APPEND ZLIB_EXTRA_CMAKE_ARGS "-DCMAKE_C_FLAGS=-I${PROJECT_SOURCE_DIR}/cmake_modules/xbox_shims")
 endif()
 
 ExternalProject_Add(

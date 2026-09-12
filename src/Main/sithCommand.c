@@ -963,7 +963,9 @@ void sithCommand_HandleBinds(uint16_t key)
     {
         if (key == pBindIter->key) {
             strcpy(sithCommand_aTmpCommandExecute, pBindIter->pCmd);
+#ifdef QUAKE_CONSOLE
             jkQuakeConsole_ExecuteCommand(sithCommand_aTmpCommandExecute);
+#endif
         }
     }
 }

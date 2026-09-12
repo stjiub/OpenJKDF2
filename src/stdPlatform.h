@@ -74,6 +74,10 @@ void DC_GetMemStats(uint32_t* pSysUsedK, uint32_t* pSysFreeK,
                     uint32_t* pVramUsedK, uint32_t* pVramTotalK, uint32_t* pAllocs);
 #endif
 
+#ifdef TARGET_XBOX
+void stdPlatform_PrintHeapStats();
+#endif
+
 // Added
 void stdPlatform_Memzero32(void* dst, uint32_t len);
 int stdPlatform_IsWordAddressableOnly(const void* p);

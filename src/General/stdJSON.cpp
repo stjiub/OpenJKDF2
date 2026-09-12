@@ -22,6 +22,11 @@ namespace std {
 }
 #endif
 
+#ifdef TARGET_XBOX
+#include <sys/stat.h>
+#include "Platform/Xbox/xbox_storage.h"
+#endif
+
 #include <nlohmann/json.hpp>
 #include <filesystem>
 #include <unordered_map>
@@ -92,14 +97,39 @@ static inline void stdJSON_PrintNullPtrWarning() {
 
 static nlohmann::json stdJSON_OpenAndReadFile(const char* pFpath)
 {
+#ifdef TARGET_XBOX
+    char aResolved[512];
+    // Altered: nxdk streams require the same absolute path as the existence check.
+    if (!xbox_resolve_path(pFpath, aResolved, sizeof(aResolved)))
+        return nlohmann::json(nlohmann::json::value_t::object);
+    pFpath = aResolved;
+#endif
     fs::path json_path = {pFpath};
     nlohmann::json json_file(nlohmann::json::value_t::object);
+#ifdef TARGET_XBOX
+    // nxdk's libc++ lacks the std::filesystem status backend.
+    struct stat statbuf;
+    if (stat(pFpath, &statbuf) != 0) {
+        return json_file;
+    }
+#else
     if (!fs::exists(json_path)) {
         return json_file;
     }
+#endif
 
     std::ifstream i(json_path);
+#ifdef TARGET_XBOX
+    if (!i)
+        return json_file;
+    // Altered: invalid settings must not abort a no-exceptions build.
+    nlohmann::json parsed = nlohmann::json::parse(i, nullptr, false);
+    if (parsed.is_discarded() || !parsed.is_object())
+        return json_file;
+    json_file = std::move(parsed);
+#else
     i >> json_file;
+#endif
     i.close();
 
     return json_file;
@@ -142,6 +172,13 @@ static int stdJSON_WriteToFile(const char* pFpath, nlohmann::json& json_file)
         return 0;
     }
 
+#ifdef TARGET_XBOX
+    char aResolved[512];
+    // Altered: route settings writes to Xbox writable storage.
+    if (!xbox_resolve_path(pFpath, aResolved, sizeof(aResolved)))
+        return 0;
+    pFpath = aResolved;
+#endif
     fs::path json_path = {pFpath};
     std::ofstream o(json_path);
     if (!o)
@@ -150,6 +187,10 @@ static int stdJSON_WriteToFile(const char* pFpath, nlohmann::json& json_file)
         return 0;
     }
     o << json_file.dump(4, ' ', true);
+#ifdef TARGET_XBOX
+    // Added: buffered writes can fail when the stream closes.
+    o.close();
+#endif
     if (!o)
     {
         stdPlatform_Printf("ERROR: Failed to write `%s`!\n", pFpath);

@@ -1,6 +1,7 @@
 #include "fcaseopen.h"
 
-#if !defined(_WIN32)
+// nxdk's compiler defines _WIN32 but the POSIX path is what's shimmed there.
+#if !defined(_WIN32) || defined(TARGET_XBOX)
 #include <stdlib.h>
 #include <string.h>
 
@@ -100,7 +101,7 @@ int casepath(char const *path, char *r)
 FILE *fcaseopen(char const *path, char const *mode)
 {
     FILE *f = fopen(path, mode);
-#if !defined(_WIN32)
+#if !defined(_WIN32) || defined(TARGET_XBOX)
     if (!f)
     {
         char *r = malloc(strlen(path) + 16);
@@ -117,7 +118,7 @@ FILE *fcaseopen(char const *path, char const *mode)
 
 void casechdir(char const *path)
 {
-#if !defined(_WIN32)
+#if !defined(_WIN32) || defined(TARGET_XBOX)
     char *r = malloc(strlen(path) + 16);
     if (casepath(path, r))
     {

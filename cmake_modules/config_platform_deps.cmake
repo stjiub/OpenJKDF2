@@ -66,7 +66,7 @@ endif()
 # GLEW is a desktop-GL extension loader; the GLES targets (WASM, Android, iOS)
 # get their entry points straight from the GLES library -- on iOS that library is
 # ANGLE, and building GLEW for the iOS SDK fails outright (no GL/glx headers).
-if((NOT GLEW_FOUND OR CMAKE_CROSSCOMPILING) AND NOT PLAT_WASM AND NOT TARGET_USE_OPENGL11 AND NOT TARGET_IOS)
+if((NOT GLEW_FOUND OR CMAKE_CROSSCOMPILING) AND NOT PLAT_WASM AND NOT TARGET_USE_OPENGL11 AND NOT TARGET_IOS AND NOT TARGET_XBOX)
     message(STATUS "Going to build “GLEW 2.2.0” from Git module")
     include(build_glew)
 endif()
@@ -260,6 +260,10 @@ if(TARGET_DREAMCAST)
     list(APPEND ENGINE_SOURCE_FILES ${PROJECT_SOURCE_DIR}/src/Platform/TWL/dlmalloc.c)
     # No hardware-accelerated dev console (it relies on the SDL2/GL UI text path).
     list(REMOVE_ITEM ENGINE_SOURCE_FILES ${PROJECT_SOURCE_DIR}/src/Main/jkQuakeConsole.c)
+endif()
+
+if(TARGET_XBOX)
+    include(${PROJECT_SOURCE_DIR}/cmake_modules/xbox_deps.cmake)
 endif()
 
 if(TARGET_WASM)

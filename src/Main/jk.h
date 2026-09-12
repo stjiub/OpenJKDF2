@@ -1,6 +1,11 @@
 #ifndef _MAINJK_H
 #define _MAINJK_H
 
+#ifdef TARGET_XBOX
+// Added: nxdk may resolve engine includes to this header.
+#include "../jk.h"
+#endif
+
 #define jk_MenuReturn_ADDR (0x00403410)
 #define jk_MissionReload_ADDR (0x00403440)
 #define jk_sub_403470_ADDR (0x00403470)

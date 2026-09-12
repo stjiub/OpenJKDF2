@@ -13,7 +13,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifndef _WIN32
+// nxdk's compiler defines _WIN32 but the POSIX path is what's shimmed there.
+#if !defined(_WIN32) || defined(TARGET_XBOX)
 #include <dirent.h>
 #include <unistd.h>
 #endif
@@ -259,7 +260,7 @@ static int rmFiles(const char *pathname, const struct stat *sbuf, int type, stru
     return 0;
 }
 
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(TARGET_XBOX)
 int stdFileUtil_Deltree(const char* lpPathName)
 {
     char tmp[512];

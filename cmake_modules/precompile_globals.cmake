@@ -24,7 +24,11 @@ else()
     set(COGAPP_DEPENDS "${Python3_EXECUTABLE}")
 endif()
 
-list(JOIN EMBEDDED_RESOURCES "+" EMBEDDED_RESOURCES_SEPARATED)
+if(TARGET_XBOX)
+    include(${PROJECT_SOURCE_DIR}/cmake_modules/xbox_resources.cmake)
+else()
+    list(JOIN EMBEDDED_RESOURCES "+" EMBEDDED_RESOURCES_SEPARATED)
+endif()
 
 # All of our pre-build steps
 add_custom_command(

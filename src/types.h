@@ -212,7 +212,8 @@ typedef int32_t LONG;
 typedef char16_t WCHAR;
 typedef int32_t PAINTSTRUCT;
 
-#ifndef GHIDRA_IMPORT
+// Builtin keywords under clang's MSVC compatibility mode (nxdk).
+#if !defined(GHIDRA_IMPORT) && !defined(TARGET_XBOX)
 typedef int8_t __int8;
 typedef int16_t __int16;
 typedef int32_t __int32;

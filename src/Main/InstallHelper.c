@@ -15,7 +15,7 @@
 #include <unistd.h>
 #endif
 
-#ifdef TARGET_DREAMCAST
+#if defined(TARGET_DREAMCAST) || defined(TARGET_XBOX)
 #include <dirent.h>
 #endif
 
@@ -1364,6 +1364,8 @@ void InstallHelper_SetCwd()
         snprintf(tmp, sizeof(tmp)-1, "%smots/", openjkdf2_aOrigCwd);
     }
     chdir(tmp);
+#elif defined(TARGET_XBOX)
+    // nxdk has no working directory; storage path mapping selects the active roots.
 #else
     if (!Main_bMotsCompat) {
         chdir("/jk1/");

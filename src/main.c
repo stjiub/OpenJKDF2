@@ -212,6 +212,11 @@ void crash_handler_basic(int sig);
 #include "SDL2_helper.h"
 #endif // LINUX
 
+#ifdef TARGET_XBOX
+#include "Platform/Xbox/xbox_gpu.h"
+#include "Platform/Xbox/xbox_storage.h"
+#endif
+
 #ifdef TARGET_TWL
 #include <nds.h>
 #include <fat.h>
@@ -351,6 +356,13 @@ KOS_INIT_FLAGS(INIT_DEFAULT | INIT_CONTROLLER);
 
 int main(int argc, char** argv)
 {
+#ifdef TARGET_XBOX
+    xbox_storage_init();
+    // Added: stop before engine startup if the renderer could not initialize.
+    if (!xbox_gpu_init())
+        return 1;
+#endif
+
 #ifdef TARGET_DREAMCAST
     // Added: on-screen CPU fault reporter (KOS default only prints to serial)
     dcFault_Install();

@@ -10,6 +10,11 @@
 #include "Platform/TWL/dlmalloc.h"
 #endif
 
+#ifdef TARGET_XBOX
+#include <sys/stat.h>
+#include "Platform/Xbox/xbox_storage.h"
+#endif
+
 #ifdef TARGET_DREAMCAST
 #include <malloc.h>                  // KOS/newlib memalign for the overflow fallback
 #include <unistd.h>                  // sbrk (current heap break, for free-RAM stats)
@@ -83,9 +88,15 @@ static stdFile_t Linux_stdFileOpen(const char* fpath, const char* mode)
 #endif
     size_t len = strlen(fpath);
 
+#ifdef TARGET_XBOX
+    // Added: reject paths that do not fit the open buffer.
+    if (len >= sizeof(tmp))
+        return 0;
+#else
     if (len > 512) {
         len = 512;
     }
+#endif
     _strncpy(tmp, fpath, sizeof(tmp));
 
 #ifndef WIN64_STANDALONE
@@ -104,6 +115,13 @@ for (int i = 0; i < len; i++)
         tmp[i] = '\\';
     }
 }
+#endif
+
+#ifdef TARGET_XBOX
+    char xboxResolved[sizeof(tmp)];
+    if (!xbox_resolve_path(tmp, xboxResolved, sizeof(xboxResolved)))
+        return 0;
+    _strncpy(tmp, xboxResolved, sizeof(tmp));
 #endif
 
     //printf("open: %s %s\n", fpath, mode);
@@ -171,6 +189,14 @@ static const char* Linux_stdFileGets(stdFile_t hGobFile, char* dst, size_t len)
     char tmp[128];
     const char* retval = dst;
     if (!dst || !len) return 0;
+
+#ifdef TARGET_XBOX
+    // Added: preserve fgets behavior for a one-byte buffer.
+    if (len == 1) {
+        *dst = 0;
+        return retval;
+    }
+#endif
     while(1) {
         size_t res = fread(tmp, 1, sizeof(tmp), (FILE*)hGobFile);
         if (!res) break;
@@ -190,6 +216,13 @@ static const char* Linux_stdFileGets(stdFile_t hGobFile, char* dst, size_t len)
             }
         }
     }
+
+#ifdef TARGET_XBOX
+    // Added: return a partial final line, or NULL at EOF.
+    if (dst == retval) return NULL;
+    *dst = 0;
+    return retval;
+#endif
 #else
     return fgets(dst, len, (FILE*)hGobFile);
 #endif
@@ -1193,6 +1226,12 @@ void stdPlatform_PrintHeapStats()
 }
 #endif // TARGET_DREAMCAST
 
+#ifdef TARGET_XBOX
+void stdPlatform_PrintHeapStats()
+{
+}
+#endif // TARGET_XBOX
+
 
 // Added: per-file allocation cataloguing. The original game clearly had debug
 // allocation hooks in its host-services design; this reconstructs the idea.
@@ -1225,6 +1264,9 @@ uint32_t stdPlatform_AllocSize(void* p)
 #elif defined(__GLIBC__)
     extern size_t malloc_usable_size(void*);
     return (uint32_t)malloc_usable_size(p);
+#elif defined(TARGET_XBOX)
+    // Must precede _MSC_VER, which clang defines for this target; nxdk has no _msize().
+    return 0;
 #elif defined(_MSC_VER)
     return (uint32_t)_msize(p);
 #else
