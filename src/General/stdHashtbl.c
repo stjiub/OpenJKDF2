@@ -136,7 +136,17 @@ tHashTable* stdHashtbl_New(int size)
     // So this just log2's the argument to make tHashTable smaller in RAM
     // and O(log2(n)) lookups
 #ifdef STDHASHTABLE_LOG2_BUCKETS
+#ifdef TARGET_XBOX
+    // Altered: nxdk log2 is unimplemented.
+    {
+        int log2Size = 0;
+        for (unsigned int n = (unsigned int)size; n > 1; n >>= 1)
+            log2Size++;
+        size = log2Size / 2;
+    }
+#else
     size = (int)log2(size) / 2;
+#endif
 #endif
 
     sizeIterIdx = 0;

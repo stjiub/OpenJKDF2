@@ -53,7 +53,12 @@ uint32_t Linux_TimeMs()
     clock_gettime(CLOCK_MONOTONIC, &_t);
 #endif
 
+#ifdef TARGET_XBOX
+    // Altered: nxdk lround is unimplemented.
+    return _t.tv_sec*1000 + (_t.tv_nsec + 500000) / 1000000;
+#else
     return _t.tv_sec*1000 + lround(_t.tv_nsec/1.0e6);
+#endif
 #endif
 }
 
@@ -71,7 +76,12 @@ uint64_t Linux_TimeUs()
     clock_gettime(CLOCK_MONOTONIC, &_t);
 #endif
 
+#ifdef TARGET_XBOX
+    // Altered: nxdk lround is unimplemented.
+    return _t.tv_sec*1000000 + (_t.tv_nsec + 500) / 1000;
+#else
     return _t.tv_sec*1000000 + lround(_t.tv_nsec/1.0e3);
+#endif
 #endif
 }
 
