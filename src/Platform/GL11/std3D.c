@@ -26,16 +26,25 @@
 // Possible on-hardware tuning (deferred):
 //  - Blended polys use standard glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 //    the modern shader pre-multiplies alpha, so additive/window blends may differ.
+//
+// TARGET_XBOX adapts this backend to pbgl without changing the desktop path.
 
 #include "Platform/std3D.h"
 
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef TARGET_XBOX
+#include <pbgl.h>
+#include <GL/gl.h>
+#define GL_GLEXT_PROTOTYPES
+#include <GL/glext.h>
+#else
 #include "SDL2_helper.h"
 
 #include <SDL_opengl.h>
 #include <SDL_video.h>
+#endif
 
 #include "Win95/stdDisplay.h"
 #include "Win95/Window.h"
@@ -101,8 +110,23 @@ static GLuint   std3D_menuTexId = 0;
 static uint8_t* std3D_pMenuRGB = NULL;
 static int      std3D_menuTexW = 0;
 static int      std3D_menuTexH = 0;
+#ifdef TARGET_XBOX
+static int      std3D_menuTexAllocW = 0;
+static int      std3D_menuTexAllocH = 0;
+#endif
 static int      std3D_menuWinW = 0;  // drawable size captured for the subrect helper
 static int      std3D_menuWinH = 0;
+
+#ifdef TARGET_XBOX
+// pbgl truncates texture dimensions to powers of two.
+static int std3D_TextureDim(int n)
+{
+    int pot = 1;
+    while (pot < n)
+        pot <<= 1;
+    return pot;
+}
+#endif
 
 // UI / HUD overlay render list (ported from the modern backend). HUD status
 // bitmaps (health/shield/force/items) and GPU-path font glyphs accumulate
@@ -121,8 +145,10 @@ static void std3D_DrawUIRenderList(void);
 static void std3D_GetDrawableSize(int* pW, int* pH)
 {
     int dw = Window_xSize, dh = Window_ySize;
+#ifndef TARGET_XBOX
     SDL_Window* pWin = SDL_GL_GetCurrentWindow();
     if (pWin) SDL_GetWindowSizeInPixels(pWin, &dw, &dh);
+#endif
     if (dw < 1) dw = 640;
     if (dh < 1) dh = 480;
     *pW = dw;
@@ -133,12 +159,18 @@ int std3D_Startup()
 {
     if (Main_bHeadless) return 1;
 
+#ifdef TARGET_XBOX
+    // pbgl always supports paletted textures and links glColorTableEXT directly.
+    std3D_glColorTableEXT = glColorTableEXT;
+    std3D_bHasPalettedTex = 1;
+#else
     const char* exts = (const char*)glGetString(GL_EXTENSIONS);
     if (exts && strstr(exts, "GL_EXT_paletted_texture"))
     {
         std3D_glColorTableEXT = (std3D_PFNGLCOLORTABLEEXTPROC)SDL_GL_GetProcAddress("glColorTableEXT");
         std3D_bHasPalettedTex = (std3D_glColorTableEXT != NULL);
     }
+#endif
 
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -185,6 +217,10 @@ void std3D_Shutdown()
     }
     std3D_menuTexW = 0;
     std3D_menuTexH = 0;
+#ifdef TARGET_XBOX
+    std3D_menuTexAllocW = 0;
+    std3D_menuTexAllocH = 0;
+#endif
 
     if (std3D_uiWhiteTex)
     {
@@ -198,6 +234,11 @@ void std3D_Shutdown()
 int std3D_StartScene()
 {
     if (Main_bHeadless) return 0;
+
+#ifdef TARGET_XBOX
+    // Added: advance the homebrew texture-streaming budget.
+    ++std3D_frameCount;
+#endif
 
     // The engine tears the renderer down on GUI/menu transitions (Video_SwitchToGDI
     // -> std3D_Shutdown) but the GDI->game restore path (Video_SetVideoDesc) can
@@ -218,7 +259,11 @@ int std3D_StartScene()
 
 int std3D_EndScene()
 {
+#ifdef TARGET_XBOX
+    pbgl_swap_buffers();
+#else
     // Buffer swap is performed by Window.c (SDL_GL_SwapWindow).
+#endif
     return 0;
 }
 
@@ -416,8 +461,13 @@ int std3D_AddToTextureCache(tVBuffer* vbuf, rdDDrawSurface* texture, int is_alph
 
     uint32_t width  = vbuf->format.width;
     uint32_t height = vbuf->format.height;
+#ifdef TARGET_XBOX
+    uint8_t*  src8  = (uint8_t*)vbuf->surface_lock_alloc;
+    uint16_t* src16 = (uint16_t*)vbuf->surface_lock_alloc;
+#else
     uint8_t*  src8  = (uint8_t*)vbuf->sdlSurface->pixels;
     uint16_t* src16 = (uint16_t*)vbuf->sdlSurface->pixels;
+#endif
 
     GLuint image_texture;
     glGenTextures(1, &image_texture);
@@ -523,7 +573,9 @@ int std3D_AddToTextureCache(tVBuffer* vbuf, rdDDrawSurface* texture, int is_alph
 
     texture->texture_id = image_texture;
     texture->texture_loaded = 1;
+#ifdef SDL2_RENDER
     texture->pDataDepthConverted = NULL;
+#endif
 
     glBindTexture(GL_TEXTURE_2D, 0);
     return 1;
@@ -604,6 +656,7 @@ void std3D_PurgeSurfaceRefs(rdDDrawSurface* texture)
     std3D_RemoveTextureFromCacheList(texture);
 }
 
+#ifdef SDL2_RENDER
 void std3D_PurgeBitmapRefs(stdBitmap* pBitmap)
 {
     // Release any GL textures this bitmap uploaded for the UI render list.
@@ -619,6 +672,9 @@ void std3D_PurgeBitmapRefs(stdBitmap* pBitmap)
         }
     }
 }
+#else
+void std3D_PurgeBitmapRefs(stdBitmap* pBitmap) {}
+#endif
 
 void std3D_UpdateFrameCount(rdDDrawSurface* pTexture)
 {
@@ -653,8 +709,15 @@ static void std3D_DrawMenuSubrect(float x, float y, float w, float h,
         scale = 1.0f;
     }
 
+#ifdef TARGET_XBOX
+    float alloc_w = std3D_menuTexAllocW > 0 ? (float)std3D_menuTexAllocW : tex_w;
+    float alloc_h = std3D_menuTexAllocH > 0 ? (float)std3D_menuTexAllocH : tex_h;
+    float u1 = x / alloc_w, u2 = (x + w) / alloc_w;
+    float v1 = y / alloc_h, v2 = (y + h) / alloc_h;
+#else
     float u1 = x / tex_w, u2 = (x + w) / tex_w;
     float v1 = y / tex_h, v2 = (y + h) / tex_h;
+#endif
     float x0 = dstX, y0 = dstY;
     float x1 = dstX + scale * w_dst, y1 = dstY + scale * h_dst;
 
@@ -683,6 +746,14 @@ void std3D_DrawMenu()
 {
     if (Main_bHeadless) return;
 
+#ifdef TARGET_XBOX
+    const int srcW = Video_menuBuffer.format.width;
+    const int srcH = Video_menuBuffer.format.height;
+    const uint8_t* pSrc = (const uint8_t*)Video_menuBuffer.surface_lock_alloc;
+    if (srcW <= 0 || srcH <= 0 || !pSrc) return;
+
+    const uint32_t srcPitch = Video_menuBuffer.format.rowSize;
+#else
     // Read the SDL surface pixels directly (like the modern backend): the engine
     // leaves the menu buffer unlocked when it's not actively drawing, which nulls
     // surface_lock_alloc -- but sdlSurface->pixels is always valid for a software
@@ -695,6 +766,7 @@ void std3D_DrawMenu()
     if (srcW <= 0 || srcH <= 0 || !pSrc) return;
 
     const uint32_t srcPitch = Video_menuBuffer.sdlSurface->pitch;
+#endif
 
     // (Re)allocate the CPU scratch buffer and GL texture when dimensions change.
     // RGBA: palette index 0 is the color-key (transparent) entry -> alpha 0, so
@@ -707,6 +779,10 @@ void std3D_DrawMenu()
         std3D_pMenuRGB = (uint8_t*)malloc((size_t)srcW * srcH * 4);
         std3D_menuTexW = srcW;
         std3D_menuTexH = srcH;
+#ifdef TARGET_XBOX
+        std3D_menuTexAllocW = std3D_TextureDim(srcW);
+        std3D_menuTexAllocH = std3D_TextureDim(srcH);
+#endif
 
         if (!std3D_menuTexId)
             glGenTextures(1, &std3D_menuTexId);
@@ -717,7 +793,11 @@ void std3D_DrawMenu()
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+#ifdef TARGET_XBOX
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, std3D_menuTexAllocW, std3D_menuTexAllocH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+#else
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, srcW, srcH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+#endif
     }
     if (!std3D_pMenuRGB) return;
 
@@ -885,6 +965,7 @@ int std3D_HasAlpha() { return 1; }
 int std3D_HasModulateAlpha() { return 1; }
 int std3D_HasAlphaFlatStippled() { return 1; }
 
+#ifdef SDL2_RENDER
 // Convert a stdBitmap mip (8-bit paletted or 16-bit) to an RGBA8 GL texture and
 // cache the id in the bitmap. Index 0 / the color key becomes transparent so the
 // UI shader's discard behavior can be replicated with alpha test. Mirrors the
@@ -1116,6 +1197,15 @@ void std3D_DrawUIClearedRectRGBA(uint8_t color_r, uint8_t color_g, uint8_t color
     std3D_uiVerticesAmt += 4;
     std3D_uiTrisAmt += 2;
 }
+#else
+// Without SDL2_RENDER the engine draws UI in software into Video_menuBuffer
+// (see jkHud_Draw), as on Dreamcast and TWL; drawing it here too would double it.
+int std3D_AddBitmapToTextureCache(stdBitmap* texture, int mipIdx, int is_alpha_tex, int no_alpha) { return 1; }
+void std3D_DrawUIBitmapRGBA(stdBitmap* pBmp, int mipIdx, flex_t dstX, flex_t dstY, rdRect* srcRect, flex_t scaleX, flex_t scaleY, int bAlphaOverwrite, uint8_t color_r, uint8_t color_g, uint8_t color_b, uint8_t color_a) {}
+void std3D_DrawUIBitmap(stdBitmap* pBmp, int mipIdx, flex_t dstX, flex_t dstY, rdRect* srcRect, flex_t scale, int bAlphaOverwrite) {}
+void std3D_DrawUIClearedRect(uint8_t palIdx, rdRect* dstRect) {}
+void std3D_DrawUIClearedRectRGBA(uint8_t color_r, uint8_t color_g, uint8_t color_b, uint8_t color_a, rdRect* dstRect) {}
+#endif
 
 // Flush the accumulated UI/HUD quads. Drawn in screen-pixel space with the same
 // top-left ortho as the menu. flags (bAlphaOverwrite) selects the modern UI
