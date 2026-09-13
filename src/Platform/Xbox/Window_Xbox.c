@@ -15,6 +15,7 @@
 #include "Main/jkQuakeConsole.h"
 #include "Gui/jkGUIRend.h"
 #include "xbox_input.h"
+#include "xbox_osk.h"
 
 #include "jk.h"
 
@@ -135,9 +136,13 @@ int Window_MessageLoop()
     return 0;
 }
 
+// Menu navigation and confirm/cancel are read from stdControl by
+// jkGuiRend_UpdateController(); only Escape and the on-screen keyboard need
+// window messages.
 static void Window_XboxPollGui()
 {
     uint16_t pressed;
+    int bKeyboard;
 
     static uint16_t Window_xboxLastButtons = 0;
     xbox_pad pad;
@@ -151,10 +156,21 @@ static void Window_XboxPollGui()
     // loop polls again, and must not see the same press.
     Window_xboxLastButtons = pad.buttons;
 
-    if (pressed & (XBOX_PAD_START | XBOX_PAD_BACK)) {
+    bKeyboard = xbox_osk_IsShowing();
+    xbox_osk_Update(&pad);
+
+    if (!bKeyboard && (pressed & (XBOX_PAD_START | XBOX_PAD_BACK))) {
         Window_msg_main_handler(g_hWnd, WM_KEYFIRST, VK_ESCAPE, 0);
         Window_msg_main_handler(g_hWnd, WM_CHAR, VK_ESCAPE, 0);
     }
+}
+
+static void Window_XboxDrawMenu()
+{
+    int bKeyboard = xbox_osk_BeginDraw();
+    std3D_DrawMenu();
+    if (bKeyboard)
+        xbox_osk_EndDraw();
 }
 
 void Window_SdlUpdate()
@@ -177,10 +193,10 @@ void Window_SdlUpdate()
     if (!jkGame_isDDraw) {
         if (!jkGuiBuildMulti_bRendering) {
             std3D_StartScene();
-            std3D_DrawMenu();
+            Window_XboxDrawMenu();
             std3D_EndScene();
         } else {
-            std3D_DrawMenu();
+            Window_XboxDrawMenu();
         }
 
         if (Window_needsRecreate) {

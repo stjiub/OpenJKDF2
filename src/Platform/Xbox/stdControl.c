@@ -2,6 +2,7 @@
 
 #include "stdPlatform.h"
 #include "xbox_input.h"
+#include "xbox_osk.h"
 
 #include "jk.h"
 
@@ -29,6 +30,8 @@ static const struct
     { KEY_JOY1_HRIGHT, XBOX_PAD_DPAD_RIGHT },
     { KEY_JOY1_HDOWN,  XBOX_PAD_DPAD_DOWN },
 };
+
+static uint16_t stdControl_xboxMaskedButtons = 0;
 
 int stdControl_Startup()
 {
@@ -123,6 +126,20 @@ void stdControl_ReadControls()
     xbox_input_poll();
     bConnected = xbox_input_read(&pad) != 0;
 
+    // The on-screen keyboard owns the pad while it's up. Buttons still held when
+    // it closes stay masked until released, so the menu doesn't act on them.
+    if (xbox_osk_IsShowing()) {
+        stdControl_xboxMaskedButtons = pad.buttons;
+        _memset(&pad, 0, sizeof(pad));
+    } else {
+        stdControl_xboxMaskedButtons &= pad.buttons;
+        pad.buttons &= ~stdControl_xboxMaskedButtons;
+
+        // Closing the keyboard steps menu focus off the text box, as d-pad down would.
+        if (xbox_osk_TakeFocusDown())
+            pad.buttons |= XBOX_PAD_DPAD_DOWN;
+    }
+
     stdControl_aJoystickExists[0] = bConnected;
     stdControl_aJoystickEnabled[0] = bConnected;
     // The joystick menu lists buttons B1 through B17 (right trigger).
@@ -155,6 +172,17 @@ void stdControl_ReadControls()
 
 void stdControl_ReadMouse() {}
 
-void stdControl_ShowSystemKeyboard() {}
-void stdControl_HideSystemKeyboard() {}
-BOOL stdControl_IsSystemKeyboardShowing() { return 0; }
+void stdControl_ShowSystemKeyboard()
+{
+    xbox_osk_Show();
+}
+
+void stdControl_HideSystemKeyboard()
+{
+    xbox_osk_Hide();
+}
+
+BOOL stdControl_IsSystemKeyboardShowing()
+{
+    return xbox_osk_IsShowing();
+}
