@@ -95,6 +95,11 @@ macro(plat_link_and_package)
                 "${XBOX_DF2_DATA_DIR}/Resource/JK_.CD"
                 DESTINATION ${XBOX_XISO_DIR}/Resource)
             file(COPY "${XBOX_DF2_DATA_DIR}/Episode/JK1.GOB" DESTINATION ${XBOX_XISO_DIR}/Episode)
+
+            file(GLOB XBOX_DF2_MUSIC "${XBOX_DF2_DATA_DIR}/MUSIC/Track*.ogg")
+            if(XBOX_DF2_MUSIC)
+                file(COPY ${XBOX_DF2_MUSIC} DESTINATION ${XBOX_XISO_DIR}/MUSIC)
+            endif()
         endif()
 
         set(XBOX_CHECK_STUBS_CMD "")

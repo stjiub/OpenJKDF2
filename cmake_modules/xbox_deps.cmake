@@ -24,4 +24,18 @@ set_source_files_properties(${PROJECT_SOURCE_DIR}/src/Platform/Xbox/xbox_input.c
     INCLUDE_DIRECTORIES "$ENV{NXDK_DIR}/lib/usb/libusbohci/inc;$ENV{NXDK_DIR}/lib/usb/libusbohci_xbox"
     COMPILE_DEFINITIONS "USBH_USE_EXTERNAL_CONFIG=\"usbh_config_xbox.h\"")
 
+# Music is Ogg Vorbis, decoded on the console.
+list(APPEND ENGINE_SOURCE_FILES ${PROJECT_SOURCE_DIR}/src/external/stb_vorbis/stb_vorbis.c)
+set_source_files_properties(${PROJECT_SOURCE_DIR}/src/external/stb_vorbis/stb_vorbis.c PROPERTIES
+    COMPILE_OPTIONS "-w")
+
+# The mixer and decoder run for every output sample on the audio threads, so
+# they stay optimized in Debug builds too.
+set_property(SOURCE
+    ${PROJECT_SOURCE_DIR}/src/Platform/Xbox/stdSound.c
+    ${PROJECT_SOURCE_DIR}/src/Platform/Xbox/xbox_audio.c
+    ${PROJECT_SOURCE_DIR}/src/Platform/Xbox/xbox_music.c
+    ${PROJECT_SOURCE_DIR}/src/external/stb_vorbis/stb_vorbis.c
+    APPEND PROPERTY COMPILE_OPTIONS "-O2;-fno-omit-frame-pointer")
+
 list(REMOVE_ITEM ENGINE_SOURCE_FILES ${PROJECT_SOURCE_DIR}/src/Main/jkQuakeConsole.c)

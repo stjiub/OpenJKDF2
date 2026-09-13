@@ -145,6 +145,41 @@ typedef struct stdSoundDreamcastBuffer {
 } stdSoundDreamcastBuffer;
 #endif
 
+#ifdef STDSOUND_XBOX
+#define STDSOUND_XBOX_QUEUE_LEN (32)
+
+// Software-mixed buffer (see src/Platform/Xbox/stdSound.c). The mixer fields
+// are shared with the audio thread and change only under its lock.
+typedef struct stdSoundXboxBuffer
+{
+    void* data;
+    int format;
+    int bStereo;
+    int bitsPerSample;
+    uint32_t nSamplesPerSec;
+    int bufferBytes;
+    int bufferLen;
+    int refcnt;
+    flex_t vol;
+    int bIsCopy;
+    flex_t pan;
+    void* pSample; // refcounted PCM, shared with duplicates
+    void* apQueue[STDSOUND_XBOX_QUEUE_LEN]; // streamed samples, played in order
+    int queueHead;
+    int queueLen;
+    int queueDone; // entries at the head that have finished playing
+    int bStream;
+    uint32_t pos;  // frame in the current sample
+    uint32_t frac; // 16.16 fraction of pos
+    uint32_t freqStep; // 16.16 source frames per output frame; 0 = native rate
+    int32_t gainL;
+    int32_t gainR;
+    int bPlaying;
+    int bLooping;
+    int voice;     // slot in the mixer's voice list, -1 if idle
+} stdSoundXboxBuffer;
+#endif
+
 typedef struct stdWaveFormat
 {
   int16_t wFormatTag;

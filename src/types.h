@@ -386,6 +386,7 @@ typedef struct SithPuppetClassSubmode SithPuppetClassSubmode;
 typedef struct stdALBuffer stdALBuffer;
 typedef struct stdMaxmodBuffer stdMaxmodBuffer;
 typedef struct stdSoundDreamcastBuffer stdSoundDreamcastBuffer;
+typedef struct stdSoundXboxBuffer stdSoundXboxBuffer;
 typedef struct stdNullSoundBuffer stdNullSoundBuffer;
 typedef struct stdFontCharset stdFontCharset;
 #ifndef RDCACHE_RENDER_NGONS
@@ -436,6 +437,11 @@ typedef stdMaxmodBuffer stdSound_3dBuffer_t;
 #ifdef STDSOUND_DREAMCAST
 typedef stdSoundDreamcastBuffer stdSound_buffer_t;
 typedef stdSoundDreamcastBuffer stdSound_3dBuffer_t;
+#endif
+
+#ifdef STDSOUND_XBOX
+typedef stdSoundXboxBuffer stdSound_buffer_t;
+typedef stdSoundXboxBuffer stdSound_3dBuffer_t;
 #endif
 
 #endif // STDSOUND_OPENAL

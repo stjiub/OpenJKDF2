@@ -501,6 +501,103 @@ flex_d_t stdMci_GetTrackLength(int track)
 
 #endif // STDMCI_DC_CDDA
 
+#elif defined(STDSOUND_XBOX)
+
+#include "General/util.h"
+#include "Main/Main.h"
+#include "Platform/Xbox/xbox_music.h"
+#include "Platform/Xbox/xbox_storage.h"
+
+// The packaged soundtrack uses MUSIC/TrackNN.ogg: disc 1 is 12..18 and disc 2
+// is 22..32. Original CD track numbers
+// (jkCredits passes 2..9) are shifted onto those by the episode's disc.
+static int stdMci_XboxTrackPath(int track, char* out, size_t outSz)
+{
+    char rel[32];
+
+    snprintf(rel, sizeof(rel), "MUSIC\\Track%d.ogg", track);
+    if (!util_FileExists(rel))
+    {
+        if (track > 12 || Main_bMotsCompat)
+            return 0;
+
+        int cdNum = 1;
+        if (jkMain_pEpisodeEnt)
+            cdNum = jkMain_pEpisodeEnt->cdNum;
+        else if (jkMain_pEpisodeEnt2)
+            cdNum = jkMain_pEpisodeEnt2->cdNum;
+
+        snprintf(rel, sizeof(rel), "MUSIC\\Track%d.ogg", track + (cdNum == 2 ? 20 : 10));
+        if (!util_FileExists(rel))
+            return 0;
+    }
+    return xbox_resolve_path(rel, out, outSz);
+}
+
+int stdMci_Startup()
+{
+    stdMci_bInitted = xbox_music_init();
+    stdMci_bIsGOG = 1;
+    return stdMci_bInitted;
+}
+
+void stdMci_Shutdown()
+{
+    stdMci_Stop();
+    stdMci_bInitted = 0;
+    stdMci_bIsGOG = 1;
+}
+
+int stdMci_Play(uint8_t trackFrom, uint8_t trackTo)
+{
+    char aPaths[XBOX_MUSIC_MAX_TRACKS][64];
+    const char* apPaths[XBOX_MUSIC_MAX_TRACKS];
+    int numPaths = 0;
+
+    if (!stdMci_bInitted)
+        return 0;
+
+    if (trackTo < trackFrom)
+        trackTo = trackFrom;
+
+    for (int track = trackFrom; track <= trackTo && numPaths < XBOX_MUSIC_MAX_TRACKS; track++)
+    {
+        if (stdMci_XboxTrackPath(track, aPaths[numPaths], sizeof(aPaths[numPaths])))
+        {
+            apPaths[numPaths] = aPaths[numPaths];
+            numPaths++;
+        }
+    }
+
+    if (!numPaths)
+    {
+        stdPlatform_Printf("stdMci: no music for tracks %d to %d\n", trackFrom, trackTo);
+        xbox_music_stop();
+        return 0;
+    }
+    return xbox_music_play(apPaths, numPaths);
+}
+
+void stdMci_SetVolume(flex_t vol)
+{
+    xbox_music_set_volume((float)vol);
+}
+
+void stdMci_Stop()
+{
+    xbox_music_stop();
+}
+
+int stdMci_CheckStatus()
+{
+    return stdMci_bInitted && xbox_music_is_playing();
+}
+
+flex_d_t stdMci_GetTrackLength(int track)
+{
+    return 0.0;
+}
+
 #elif defined(STDSOUND_NULL) || defined(STDSOUND_MAXMOD) || defined(ARCH_WASM)
 // Added: no SDL3_mixer for WASM (Emscripten's port system only has
 // -sUSE_SDL_MIXER=2, incompatible with this file's SDL3_mixer-API rewrite below)
