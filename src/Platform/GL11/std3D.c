@@ -690,6 +690,13 @@ int std3D_AddToTextureCache(tVBuffer* vbuf, rdDDrawSurface* texture, int is_alph
         texture->is_16bit = 0;
         uint8_t* pal = (uint8_t*)vbuf->palette; // 3 bytes/entry when present
 
+#ifdef TARGET_XBOX
+        // Altered: homebrew rdCache requests opaque variants for keyed materials.
+        const int bColorKey = is_alpha_tex;
+#else
+        const int bColorKey = !no_alpha;
+#endif
+
         if (std3D_bHasPalettedTex)
         {
             // Hardware 8-bit path: upload indices + an RGBA color table. Index 0 is
@@ -708,7 +715,7 @@ int std3D_AddToTextureCache(tVBuffer* vbuf, rdDDrawSurface* texture, int is_alph
                 table[k*4+0] = r;
                 table[k*4+1] = g;
                 table[k*4+2] = b;
-                table[k*4+3] = (k == 0 && !no_alpha) ? 0x00 : 0xFF;
+                table[k*4+3] = (k == 0 && bColorKey) ? 0x00 : 0xFF;
             }
             std3D_glColorTableEXT(GL_TEXTURE_2D, GL_RGBA8, 256, GL_RGBA, GL_UNSIGNED_BYTE, table);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_COLOR_INDEX8_EXT, width, height, 0,
@@ -729,7 +736,7 @@ int std3D_AddToTextureCache(tVBuffer* vbuf, rdDDrawSurface* texture, int is_alph
                     r = c->r; g = c->g; b = c->b;
                 }
                 else { r = std3D_currentPalette[idx].r; g = std3D_currentPalette[idx].g; b = std3D_currentPalette[idx].b; }
-                uint8_t a = (idx == 0 && !no_alpha) ? 0x00 : 0xFF;
+                uint8_t a = (idx == 0 && bColorKey) ? 0x00 : 0xFF;
                 image_data[i] = (uint32_t)r | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
             }
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
