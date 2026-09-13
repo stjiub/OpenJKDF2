@@ -2365,7 +2365,7 @@ LABEL_17:
 
 // Added
 void sithControl_MapDefaultsJoystick() {
-#if !defined(TARGET_RETRO_HOMEBREW) && defined(QOL_IMPROVEMENTS)
+#if defined(PLATFORM_DUAL_ANALOG_GAMEPAD) && defined(QOL_IMPROVEMENTS)
     stdControlKeyInfoEntry* mapped;
 
     mapped = sithControl_BindAxis(INPUT_FUNC_FORWARD, AXIS_JOY1_Y, 4u);

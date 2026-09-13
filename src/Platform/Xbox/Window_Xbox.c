@@ -14,6 +14,7 @@
 #include "Platform/wuRegistry.h"
 #include "Main/jkQuakeConsole.h"
 #include "Gui/jkGUIRend.h"
+#include "xbox_input.h"
 
 #include "jk.h"
 
@@ -134,9 +135,33 @@ int Window_MessageLoop()
     return 0;
 }
 
+static void Window_XboxPollGui()
+{
+    uint16_t pressed;
+
+    static uint16_t Window_xboxLastButtons = 0;
+    xbox_pad pad;
+
+    xbox_input_poll();
+    xbox_input_read(&pad);
+
+    pressed = pad.buttons & ~Window_xboxLastButtons;
+
+    // Update before dispatching: Escape can open a menu whose nested message
+    // loop polls again, and must not see the same press.
+    Window_xboxLastButtons = pad.buttons;
+
+    if (pressed & (XBOX_PAD_START | XBOX_PAD_BACK)) {
+        Window_msg_main_handler(g_hWnd, WM_KEYFIRST, VK_ESCAPE, 0);
+        Window_msg_main_handler(g_hWnd, WM_CHAR, VK_ESCAPE, 0);
+    }
+}
+
 void Window_SdlUpdate()
 {
     if (Main_bHeadless) return;
+
+    Window_XboxPollGui();
 
     if (Window_resized) {
         jkMain_FixRes();

@@ -48,6 +48,11 @@
 #define PLATFORM_DROIDWORKS
 #endif
 
+// Default gamepad bindings use two analog sticks and analog triggers
+#if !defined(TARGET_RETRO_HOMEBREW) || defined(TARGET_XBOX)
+#define PLATFORM_DUAL_ANALOG_GAMEPAD
+#endif
+
 // Original game will speed up if framerate is over 100?
 #ifndef QOL_IMPROVEMENTS
 #define SITHTIME_MINDELTA (10)

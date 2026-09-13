@@ -19,4 +19,9 @@ list(APPEND ENGINE_SOURCE_FILES ${XBOX_PBGL_SRCS})
 # in by default; its CMake toolchain doesn't.
 list(APPEND ENGINE_SOURCE_FILES $ENV{NXDK_DIR}/lib/nxdk/automount_d.c)
 
+# Gamepads go through nxdk's USB host stack; its toolchain links nxdk_usb.lib.
+set_source_files_properties(${PROJECT_SOURCE_DIR}/src/Platform/Xbox/xbox_input.c PROPERTIES
+    INCLUDE_DIRECTORIES "$ENV{NXDK_DIR}/lib/usb/libusbohci/inc;$ENV{NXDK_DIR}/lib/usb/libusbohci_xbox"
+    COMPILE_DEFINITIONS "USBH_USE_EXTERNAL_CONFIG=\"usbh_config_xbox.h\"")
+
 list(REMOVE_ITEM ENGINE_SOURCE_FILES ${PROJECT_SOURCE_DIR}/src/Main/jkQuakeConsole.c)
