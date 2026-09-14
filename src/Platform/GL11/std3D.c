@@ -107,12 +107,20 @@ static rdColor24 std3D_currentPalette[256];
 // the 8-bit Video_menuBuffer; we expand it to an RGB GL texture each frame and
 // draw it as a fullscreen quad in the GL context (see std3D_DrawMenu).
 static GLuint   std3D_menuTexId = 0;
+#ifndef TARGET_XBOX
 static uint8_t* std3D_pMenuRGB = NULL;
+#endif
 static int      std3D_menuTexW = 0;
 static int      std3D_menuTexH = 0;
 #ifdef TARGET_XBOX
 static int      std3D_menuTexAllocW = 0;
 static int      std3D_menuTexAllocH = 0;
+// The menu texture is paletted and mirrors these indices and palette, so only
+// changed rows are re-uploaded. pbgl swizzles every uploaded texel on the CPU.
+static uint8_t*  std3D_pMenuShadow = NULL;
+static int       std3D_bMenuShadowValid = 0;
+static rdColor24 std3D_aMenuPalette[256];
+static uint8_t   std3D_aMenuColorTable[256 * 4];
 #endif
 static int      std3D_menuWinW = 0;  // drawable size captured for the subrect helper
 static int      std3D_menuWinH = 0;
@@ -125,6 +133,83 @@ static int std3D_TextureDim(int n)
     while (pot < n)
         pot <<= 1;
     return pot;
+}
+
+static uint32_t std3D_LoadU32(const uint8_t* p)
+{
+    uint32_t val;
+    __builtin_memcpy(&val, p, sizeof(val));
+    return val;
+}
+
+// Returns 0 if the rows match, otherwise the first and last differing columns.
+static int std3D_FindRowChange(const uint8_t* pA, const uint8_t* pB, int len, int* pFirst, int* pLast)
+{
+    int first = 0;
+    int last = len - 1;
+
+    while (first + 4 <= len && std3D_LoadU32(pA + first) == std3D_LoadU32(pB + first))
+        first += 4;
+    while (first < len && pA[first] == pB[first])
+        first++;
+    if (first == len)
+        return 0;
+
+    while (last - 3 > first && std3D_LoadU32(pA + last - 3) == std3D_LoadU32(pB + last - 3))
+        last -= 4;
+    while (pA[last] == pB[last])
+        last--;
+
+    *pFirst = first;
+    *pLast = last;
+    return 1;
+}
+
+// Sets the bound menu texture's palette; pbgl applies it on the next upload.
+static void std3D_SetMenuPalette(void)
+{
+    memcpy(std3D_aMenuPalette, stdDisplay_masterPalette, sizeof(std3D_aMenuPalette));
+    for (int i = 0; i < 256; i++)
+    {
+        std3D_aMenuColorTable[i*4+0] = std3D_aMenuPalette[i].r;
+        std3D_aMenuColorTable[i*4+1] = std3D_aMenuPalette[i].g;
+        std3D_aMenuColorTable[i*4+2] = std3D_aMenuPalette[i].b;
+        std3D_aMenuColorTable[i*4+3] = i ? 0xFF : 0x00;
+    }
+    std3D_glColorTableEXT(GL_TEXTURE_2D, GL_RGBA8, 256, GL_RGBA, GL_UNSIGNED_BYTE, std3D_aMenuColorTable);
+}
+
+static void std3D_UploadMenuTexture(const uint8_t* pSrc, uint32_t srcPitch, int srcW, int srcH)
+{
+    glBindTexture(GL_TEXTURE_2D, std3D_menuTexId);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    if (memcmp(std3D_aMenuPalette, stdDisplay_masterPalette, sizeof(std3D_aMenuPalette)))
+    {
+        std3D_SetMenuPalette();
+        std3D_bMenuShadowValid = 0;
+    }
+
+    if (!std3D_bMenuShadowValid)
+    {
+        for (int y = 0; y < srcH; y++)
+            memcpy(std3D_pMenuShadow + (size_t)y * srcW, pSrc + (size_t)y * srcPitch, srcW);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, srcW, srcH, GL_COLOR_INDEX, GL_UNSIGNED_BYTE, std3D_pMenuShadow);
+        std3D_bMenuShadowValid = 1;
+        return;
+    }
+
+    for (int y = 0; y < srcH; y++)
+    {
+        const uint8_t* pRow = pSrc + (size_t)y * srcPitch;
+        uint8_t* pShadowRow = std3D_pMenuShadow + (size_t)y * srcW;
+        int first, last;
+        if (!std3D_FindRowChange(pRow, pShadowRow, srcW, &first, &last))
+            continue;
+
+        memcpy(pShadowRow + first, pRow + first, last - first + 1);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, first, y, last - first + 1, 1, GL_COLOR_INDEX, GL_UNSIGNED_BYTE, pShadowRow + first);
+    }
 }
 #endif
 
@@ -210,16 +295,21 @@ void std3D_Shutdown()
         glDeleteTextures(1, &std3D_menuTexId);
         std3D_menuTexId = 0;
     }
+#ifndef TARGET_XBOX
     if (std3D_pMenuRGB)
     {
         free(std3D_pMenuRGB);
         std3D_pMenuRGB = NULL;
     }
+#endif
     std3D_menuTexW = 0;
     std3D_menuTexH = 0;
 #ifdef TARGET_XBOX
     std3D_menuTexAllocW = 0;
     std3D_menuTexAllocH = 0;
+    free(std3D_pMenuShadow);
+    std3D_pMenuShadow = NULL;
+    std3D_bMenuShadowValid = 0;
 #endif
 
     if (std3D_uiWhiteTex)
@@ -918,6 +1008,7 @@ static void std3D_DrawMenuSubrect(float x, float y, float w, float h,
 // upload to a GL texture, and draw it in the existing GL context. Geometry/layout
 // (menu pillarbox, cutscene letterbox + subtitles, in-game HUD compositing) mirror
 // std3D_DrawMenu in src/Platform/GL/std3D.c.
+// On Xbox, pbgl performs the palette lookup with a paletted texture instead.
 void std3D_DrawMenu()
 {
     if (Main_bHeadless) return;
@@ -951,14 +1042,19 @@ void std3D_DrawMenu()
     // jkGame_Render -- it must NOT clear or opaquely overpaint the 3D scene).
     if (std3D_menuTexW != srcW || std3D_menuTexH != srcH || !std3D_menuTexId)
     {
-        if (std3D_pMenuRGB) free(std3D_pMenuRGB);
-        std3D_pMenuRGB = (uint8_t*)malloc((size_t)srcW * srcH * 4);
-        std3D_menuTexW = srcW;
-        std3D_menuTexH = srcH;
 #ifdef TARGET_XBOX
+        free(std3D_pMenuShadow);
+        std3D_pMenuShadow = (uint8_t*)malloc((size_t)srcW * srcH);
+        std3D_bMenuShadowValid = 0;
+        if (!std3D_pMenuShadow) return;
         std3D_menuTexAllocW = std3D_TextureDim(srcW);
         std3D_menuTexAllocH = std3D_TextureDim(srcH);
+#else
+        if (std3D_pMenuRGB) free(std3D_pMenuRGB);
+        std3D_pMenuRGB = (uint8_t*)malloc((size_t)srcW * srcH * 4);
 #endif
+        std3D_menuTexW = srcW;
+        std3D_menuTexH = srcH;
 
         if (!std3D_menuTexId)
             glGenTextures(1, &std3D_menuTexId);
@@ -970,11 +1066,18 @@ void std3D_DrawMenu()
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 #ifdef TARGET_XBOX
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, std3D_menuTexAllocW, std3D_menuTexAllocH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        // The palette must be set before allocation to reserve its storage.
+        std3D_SetMenuPalette();
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_COLOR_INDEX8_EXT, std3D_menuTexAllocW, std3D_menuTexAllocH, 0, GL_COLOR_INDEX, GL_UNSIGNED_BYTE, NULL);
 #else
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, srcW, srcH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 #endif
     }
+#ifdef TARGET_XBOX
+    if (!std3D_pMenuShadow) return;
+
+    std3D_UploadMenuTexture(pSrc, srcPitch, srcW, srcH);
+#else
     if (!std3D_pMenuRGB) return;
 
     // Expand the 8-bit indices through the display palette into RGBA8888;
@@ -1004,6 +1107,7 @@ void std3D_DrawMenu()
     glBindTexture(GL_TEXTURE_2D, std3D_menuTexId);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, srcW, srcH, GL_RGBA, GL_UNSIGNED_BYTE, std3D_pMenuRGB);
+#endif
 
     // Query the real drawable size (HiDPI-safe) rather than Window_xSize, which
     // may not be updated until the first resize event.
