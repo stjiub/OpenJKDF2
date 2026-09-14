@@ -122,13 +122,22 @@ macro(plat_link_and_package)
                 -P ${PROJECT_SOURCE_DIR}/cmake_modules/xbox_check_stubs.cmake)
         endif()
 
+        set(XBOX_TITLE "OpenJKDF2" CACHE STRING "Title the dashboard shows for the XBE (1 to 40 characters)")
+        string(LENGTH "${XBOX_TITLE}" XBOX_TITLE_LEN)
+        if(XBOX_TITLE_LEN EQUAL 0 OR XBOX_TITLE_LEN GREATER 40)
+            message(FATAL_ERROR "XBOX_TITLE must be 1 to 40 characters: \"${XBOX_TITLE}\"")
+        endif()
+        # Only rewritten when the title changes, so a new title re-runs cxbe.
+        set(XBOX_TITLE_STAMP ${CMAKE_CURRENT_BINARY_DIR}/xbox_title.txt)
+        file(CONFIGURE OUTPUT ${XBOX_TITLE_STAMP} CONTENT "${XBOX_TITLE}")
+
         set(XBOX_XBE_OUT ${XBOX_XISO_DIR}/default.xbe)
         add_custom_command(
             OUTPUT ${XBOX_XBE_OUT}
             ${XBOX_CHECK_STUBS_CMD}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${XBOX_XISO_DIR}
-            COMMAND ${CXBE} -OUT:${XBOX_XBE_OUT} -TITLE:"OpenJKDF2" $<TARGET_FILE:${BIN_NAME}>
-            DEPENDS ${BIN_NAME}
+            COMMAND ${CXBE} -OUT:${XBOX_XBE_OUT} -TITLE:${XBOX_TITLE} $<TARGET_FILE:${BIN_NAME}>
+            DEPENDS ${BIN_NAME} ${XBOX_TITLE_STAMP}
             COMMENT "cxbe: $<TARGET_FILE_NAME:${BIN_NAME}> -> default.xbe"
             VERBATIM)
         add_custom_target(${BIN_NAME}_xbe ALL DEPENDS ${XBOX_XBE_OUT})
