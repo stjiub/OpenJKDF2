@@ -51,6 +51,15 @@ macro(plat_initialize)
     add_compile_options(-Wall -Wno-unused-variable -Wno-parentheses -Wno-missing-braces)
     add_compile_options(-fno-exceptions)
 
+    # nxdk's toolchain sets no optimization level of its own. Frame pointers
+    # are kept so GDB can walk the stack in any build type.
+    if(CMAKE_BUILD_TYPE STREQUAL Debug)
+        add_compile_options(-g -O0)
+    else()
+        add_compile_options(-O2)
+    endif()
+    add_compile_options(-fno-omit-frame-pointer)
+
     include_directories(${NXDK_DIR}/lib)
     include_directories(${NXDK_DIR}/lib/pbkit)
 

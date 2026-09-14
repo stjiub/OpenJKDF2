@@ -11,6 +11,16 @@ list(APPEND ENGINE_SOURCE_FILES
     ${XBOX_PBKIT_DIR}/pbkit_draw.c
     ${XBOX_PBKIT_DIR}/pbkit_print.c
     ${XBOX_PBKIT_DIR}/pbkit_pushbuffer.c)
+# pbkit polls state shared with its interrupt handlers through non-volatile
+# variables, so it keeps nxdk's default of no optimization.
+set_property(SOURCE
+    ${XBOX_PBKIT_DIR}/pbkit.c
+    ${XBOX_PBKIT_DIR}/pbkit_gamma.c
+    ${XBOX_PBKIT_DIR}/pbkit_dma.c
+    ${XBOX_PBKIT_DIR}/pbkit_draw.c
+    ${XBOX_PBKIT_DIR}/pbkit_print.c
+    ${XBOX_PBKIT_DIR}/pbkit_pushbuffer.c
+    APPEND PROPERTY COMPILE_OPTIONS "-O0")
 
 file(GLOB XBOX_PBGL_SRCS ${PBGL_DIR}/src/*.c)
 list(APPEND ENGINE_SOURCE_FILES ${XBOX_PBGL_SRCS})
@@ -36,6 +46,6 @@ set_property(SOURCE
     ${PROJECT_SOURCE_DIR}/src/Platform/Xbox/xbox_audio.c
     ${PROJECT_SOURCE_DIR}/src/Platform/Xbox/xbox_music.c
     ${PROJECT_SOURCE_DIR}/src/external/stb_vorbis/stb_vorbis.c
-    APPEND PROPERTY COMPILE_OPTIONS "-O2;-fno-omit-frame-pointer")
+    APPEND PROPERTY COMPILE_OPTIONS "-O2")
 
 list(REMOVE_ITEM ENGINE_SOURCE_FILES ${PROJECT_SOURCE_DIR}/src/Main/jkQuakeConsole.c)
