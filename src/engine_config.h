@@ -131,7 +131,11 @@
 #define RDCACHE_MAX_TRIS (0x80) // theoretical max 0x800?
 #define RDCACHE_MAX_VERTICES (0x180) // theoretical max 0x1800?
 
+#ifdef TARGET_XBOX
+#define STD3D_MAX_TEXTURES (4096)
+#else
 #define STD3D_MAX_TEXTURES (512) // theoretical max 2048
+#endif
 #define STD3D_MAX_UI_TRIS (0x100)
 #define STD3D_MAX_UI_VERTICES (0x100)
 #else
@@ -388,6 +392,14 @@
 // Deferred material loading and LRU unloading
 #define RDMATERIAL_LRU_LOAD_UNLOAD
 #define RDMATERIAL_MINIMIZE_STRUCTS
+
+// Xbox has the memory to load whole textures with the level; the others load
+// only metadata, stream texture data in on first use, and keep only the
+// smallest mip levels.
+#ifndef TARGET_XBOX
+#define RDMATERIAL_DEFERRED_DATA
+#define RDMATERIAL_SMALLEST_MIP_ONLY
+#endif
 
 // Halve the x/y positions/sizes for all jkGui elements
 #ifdef TARGET_TWL

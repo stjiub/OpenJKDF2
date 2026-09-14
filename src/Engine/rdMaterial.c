@@ -335,7 +335,9 @@ LABEL_21:
 
 #else // if defined(TARGET_RETRO_HOMEBREW)
         // Limit textures that are loaded on TWL
-#ifdef TARGET_TWL
+#if !defined(RDMATERIAL_SMALLEST_MIP_ONLY)
+        if (1) {
+#elif defined(TARGET_TWL)
         if ((format.width <= 16 || mipmap_num >= texture->num_mipmaps-1)) {
 #else
         if ((format.width <= 16 || mipmap_num >= texture->num_mipmaps-1)) { // Dreamcast has Big Boy amounts of VRAM
@@ -511,7 +513,7 @@ int rdMaterial_LoadEntry(char *pFilename, rdMaterial *pMat, int create_ddraw_sur
     int prevId = pMat->id;
     _memset(pMat, 0, sizeof(rdMaterial));
     pMat->id = prevId;
-#if defined(RDMATERIAL_LRU_LOAD_UNLOAD)
+#if defined(RDMATERIAL_DEFERRED_DATA)
     return rdMaterial_LoadEntry_Common(pFilename, pMat, create_ddraw_surface, gpu_mem, /*!openjkdf2_bIsExtraLowMemoryPlatform*/0);
 #else
     return rdMaterial_LoadEntry_Common(pFilename, pMat, create_ddraw_surface, gpu_mem, 1);
@@ -800,7 +802,7 @@ int rdMaterial_EnsureMetadata(rdMaterial* pMaterial) {
 // Added
 void rdMaterial_OptionalFree(rdMaterial* pMaterial) {
     if (!pMaterial) return;
-#ifdef TARGET_RETRO_HOMEBREW
+#ifdef RDMATERIAL_DEFERRED_DATA
     //if (openjkdf2_bIsExtraLowMemoryPlatform) {
         rdMaterial_FreeEntry(pMaterial);
     //}
