@@ -21,6 +21,9 @@
 #ifdef TARGET_DREAMCAST
 #include "Platform/Dreamcast/dcStorage.h" // Added: route cutscene videos to /cd
 #endif
+#ifdef TARGET_XBOX
+#include "Platform/Xbox/xbox_storage.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -322,6 +325,19 @@ int jkCutscene_sub_421310(char* fpath)
             _strncpy(tmp, dcTmp, sizeof(tmp));
             tmp[sizeof(tmp) - 1] = 0;
         }
+    }
+#endif
+
+#ifdef TARGET_XBOX
+    // Added: smush_from_fpath and smk_open_file fopen() tmp directly, and nxdk
+    // has no working directory to resolve a relative path against.
+    {
+        char xboxTmp[512];
+        if (!xbox_resolve_path(tmp, xboxTmp, sizeof(xboxTmp))) {
+            stdPlatform_Printf("Failed to load file `%s`!\n", tmp);
+            return 1;
+        }
+        _strncpy(tmp, xboxTmp, sizeof(tmp));
     }
 #endif
 
