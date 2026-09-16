@@ -10,6 +10,9 @@
 #ifdef TARGET_DREAMCAST
 #include "Platform/Dreamcast/dcStorage.h"
 #endif
+#ifdef TARGET_XBOX
+#include "Platform/Xbox/xbox_storage.h" // Added: per-game asset and save directories
+#endif
 
 #ifdef TARGET_TWL
 #include <unistd.h>
@@ -1366,6 +1369,7 @@ void InstallHelper_SetCwd()
     chdir(tmp);
 #elif defined(TARGET_XBOX)
     // nxdk has no working directory; storage path mapping selects the active roots.
+    xbox_storage_SetGame(Main_bMotsCompat);
 #else
     if (!Main_bMotsCompat) {
         chdir("/jk1/");

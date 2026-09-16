@@ -82,6 +82,38 @@ macro(plat_specific_deps)
     set(SDL2_COMMON_LIBS "")
 endmacro()
 
+# Copies one game's install into its own directory on the disc: the resource
+# and episode files it needs, its cutscenes, and its packaged Ogg soundtrack.
+# Does nothing if DATA_DIR is empty.
+function(xbox_copy_game_data)
+    cmake_parse_arguments(ARG "" "DATA_DIR;XISO_DIR;GAME_DIR;CHECK_FILE;VIDEO_EXT" "RESOURCE;EPISODE" ${ARGN})
+
+    if(NOT ARG_DATA_DIR)
+        return()
+    endif()
+    if(NOT EXISTS "${ARG_DATA_DIR}/${ARG_CHECK_FILE}")
+        message(FATAL_ERROR "No ${ARG_GAME_DIR} game data at ${ARG_DATA_DIR}")
+    endif()
+
+    set(gameDir ${ARG_XISO_DIR}/${ARG_GAME_DIR})
+    foreach(name IN LISTS ARG_RESOURCE)
+        file(COPY "${ARG_DATA_DIR}/Resource/${name}" DESTINATION ${gameDir}/Resource)
+    endforeach()
+    foreach(name IN LISTS ARG_EPISODE)
+        file(COPY "${ARG_DATA_DIR}/Episode/${name}" DESTINATION ${gameDir}/Episode)
+    endforeach()
+
+    file(GLOB video "${ARG_DATA_DIR}/Resource/VIDEO/*.${ARG_VIDEO_EXT}")
+    if(video)
+        file(COPY ${video} DESTINATION ${gameDir}/Resource/VIDEO)
+    endif()
+
+    file(GLOB music "${ARG_DATA_DIR}/MUSIC/Track*.ogg")
+    if(music)
+        file(COPY ${music} DESTINATION ${gameDir}/MUSIC)
+    endif()
+endfunction()
+
 macro(plat_link_and_package)
     target_link_libraries(sith_engine PRIVATE nlohmann_json::nlohmann_json)
 
@@ -94,27 +126,18 @@ macro(plat_link_and_package)
         # Game data to put on the disc. Under an MSYS2-hosted CMake, install paths
         # must be POSIX-style (/d/...), not D:/...
         set(XBOX_DF2_DATA_DIR "" CACHE PATH "Jedi Knight install to copy onto the XISO")
-        if(XBOX_DF2_DATA_DIR)
-            if(NOT EXISTS "${XBOX_DF2_DATA_DIR}/Resource/Res1hi.gob")
-                message(FATAL_ERROR "No Jedi Knight data at XBOX_DF2_DATA_DIR=${XBOX_DF2_DATA_DIR}")
-            endif()
-            file(COPY
-                "${XBOX_DF2_DATA_DIR}/Resource/Res1hi.gob"
-                "${XBOX_DF2_DATA_DIR}/Resource/Res2.gob"
-                "${XBOX_DF2_DATA_DIR}/Resource/JK_.CD"
-                DESTINATION ${XBOX_XISO_DIR}/Resource)
-            file(COPY "${XBOX_DF2_DATA_DIR}/Episode/JK1.GOB" DESTINATION ${XBOX_XISO_DIR}/Episode)
+        set(XBOX_MOTS_DATA_DIR "" CACHE PATH "Mysteries of the Sith install to copy onto the XISO")
 
-            file(GLOB XBOX_DF2_VIDEO "${XBOX_DF2_DATA_DIR}/Resource/VIDEO/*.SMK")
-            if(XBOX_DF2_VIDEO)
-                file(COPY ${XBOX_DF2_VIDEO} DESTINATION ${XBOX_XISO_DIR}/Resource/VIDEO)
-            endif()
-
-            file(GLOB XBOX_DF2_MUSIC "${XBOX_DF2_DATA_DIR}/MUSIC/Track*.ogg")
-            if(XBOX_DF2_MUSIC)
-                file(COPY ${XBOX_DF2_MUSIC} DESTINATION ${XBOX_XISO_DIR}/MUSIC)
-            endif()
-        endif()
+        # Each game gets its own directory on the disc, the layout the engine
+        # switches between when it restarts into the other game.
+        xbox_copy_game_data(DATA_DIR "${XBOX_DF2_DATA_DIR}" XISO_DIR ${XBOX_XISO_DIR} GAME_DIR jk1
+            CHECK_FILE Resource/Res1hi.gob VIDEO_EXT SMK
+            RESOURCE Res1hi.gob Res2.gob JK_.CD
+            EPISODE JK1.GOB)
+        xbox_copy_game_data(DATA_DIR "${XBOX_MOTS_DATA_DIR}" XISO_DIR ${XBOX_XISO_DIR} GAME_DIR mots
+            CHECK_FILE Resource/JKMRES.GOO VIDEO_EXT SAN
+            RESOURCE JKMRES.GOO JKMsndLO.goo JK_.CD
+            EPISODE JKM.GOO)
 
         set(XBOX_CHECK_STUBS_CMD "")
         if(XBOX_LLVM_NM)
