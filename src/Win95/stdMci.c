@@ -508,15 +508,26 @@ flex_d_t stdMci_GetTrackLength(int track)
 #include "Platform/Xbox/xbox_music.h"
 #include "Platform/Xbox/xbox_storage.h"
 
+// Mysteries of the Sith zero-pads its track numbers where Jedi Knight does not.
+static int stdMci_XboxFindTrack(int track, char* rel, size_t relSz)
+{
+    snprintf(rel, relSz, "MUSIC\\Track%d.ogg", track);
+    if (util_FileExists(rel))
+        return 1;
+
+    snprintf(rel, relSz, "MUSIC\\Track%02d.ogg", track);
+    return util_FileExists(rel);
+}
+
 // The packaged soundtrack uses MUSIC/TrackNN.ogg: disc 1 is 12..18 and disc 2
 // is 22..32. Original CD track numbers
 // (jkCredits passes 2..9) are shifted onto those by the episode's disc.
+// Mysteries of the Sith numbers its own tracks from 2 and needs no shift.
 static int stdMci_XboxTrackPath(int track, char* out, size_t outSz)
 {
     char rel[32];
 
-    snprintf(rel, sizeof(rel), "MUSIC\\Track%d.ogg", track);
-    if (!util_FileExists(rel))
+    if (!stdMci_XboxFindTrack(track, rel, sizeof(rel)))
     {
         if (track > 12 || Main_bMotsCompat)
             return 0;
@@ -527,8 +538,7 @@ static int stdMci_XboxTrackPath(int track, char* out, size_t outSz)
         else if (jkMain_pEpisodeEnt2)
             cdNum = jkMain_pEpisodeEnt2->cdNum;
 
-        snprintf(rel, sizeof(rel), "MUSIC\\Track%d.ogg", track + (cdNum == 2 ? 20 : 10));
-        if (!util_FileExists(rel))
+        if (!stdMci_XboxFindTrack(track + (cdNum == 2 ? 20 : 10), rel, sizeof(rel)))
             return 0;
     }
     return xbox_resolve_path(rel, out, outSz);
