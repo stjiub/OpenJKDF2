@@ -508,7 +508,7 @@ flex_d_t stdMci_GetTrackLength(int track)
 #include "Platform/Xbox/xbox_music.h"
 #include "Platform/Xbox/xbox_storage.h"
 
-// Mysteries of the Sith zero-pads its track numbers where Jedi Knight does not.
+// Added: Mysteries of the Sith zero-pads its track numbers where Jedi Knight does not.
 static int stdMci_XboxFindTrack(int track, char* rel, size_t relSz)
 {
     snprintf(rel, relSz, "MUSIC\\Track%d.ogg", track);

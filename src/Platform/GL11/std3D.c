@@ -395,6 +395,7 @@ void std3D_AddRenderListLines(rdLine* lines, uint32_t num_lines)
 }
 
 #ifdef TARGET_XBOX
+// Added: the NV2A needs CPU depth mapping and view-volume clipping.
 typedef struct
 {
     float x, y, z, w;
@@ -839,7 +840,8 @@ int std3D_AddToTextureCache(tVBuffer* vbuf, rdDDrawSurface* texture, int is_alph
 
     texture->texture_id = image_texture;
     texture->texture_loaded = 1;
-#ifdef SDL2_RENDER
+    // The Xbox surface does not have desktop SDL conversion data.
+#ifndef TARGET_XBOX
     texture->pDataDepthConverted = NULL;
 #endif
 
@@ -922,7 +924,7 @@ void std3D_PurgeSurfaceRefs(rdDDrawSurface* texture)
     std3D_RemoveTextureFromCacheList(texture);
 }
 
-#ifdef SDL2_RENDER
+#ifndef TARGET_XBOX
 void std3D_PurgeBitmapRefs(stdBitmap* pBitmap)
 {
     // Release any GL textures this bitmap uploaded for the UI render list.
@@ -939,6 +941,7 @@ void std3D_PurgeBitmapRefs(stdBitmap* pBitmap)
     }
 }
 #else
+// Xbox draws the UI through the software-paletted menu buffer.
 void std3D_PurgeBitmapRefs(stdBitmap* pBitmap) {}
 #endif
 
@@ -1245,7 +1248,7 @@ int std3D_HasAlpha() { return 1; }
 int std3D_HasModulateAlpha() { return 1; }
 int std3D_HasAlphaFlatStippled() { return 1; }
 
-#ifdef SDL2_RENDER
+#ifndef TARGET_XBOX
 // Convert a stdBitmap mip (8-bit paletted or 16-bit) to an RGBA8 GL texture and
 // cache the id in the bitmap. Index 0 / the color key becomes transparent so the
 // UI shader's discard behavior can be replicated with alpha test. Mirrors the
@@ -1478,7 +1481,7 @@ void std3D_DrawUIClearedRectRGBA(uint8_t color_r, uint8_t color_g, uint8_t color
     std3D_uiTrisAmt += 2;
 }
 #else
-// Without SDL2_RENDER the engine draws UI in software into Video_menuBuffer
+// Xbox draws UI in software into Video_menuBuffer
 // (see jkHud_Draw), as on Dreamcast and TWL; drawing it here too would double it.
 int std3D_AddBitmapToTextureCache(stdBitmap* texture, int mipIdx, int is_alpha_tex, int no_alpha) { return 1; }
 void std3D_DrawUIBitmapRGBA(stdBitmap* pBmp, int mipIdx, flex_t dstX, flex_t dstY, rdRect* srcRect, flex_t scaleX, flex_t scaleY, int bAlphaOverwrite, uint8_t color_r, uint8_t color_g, uint8_t color_b, uint8_t color_a) {}

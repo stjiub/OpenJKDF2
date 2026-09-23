@@ -24,6 +24,7 @@ else()
     set(COGAPP_DEPENDS "${Python3_EXECUTABLE}")
 endif()
 
+set(EMBEDDED_RESOURCES_PROJECT_ROOT "${PROJECT_SOURCE_DIR}")
 if(TARGET_XBOX)
     include(${PROJECT_SOURCE_DIR}/cmake_modules/xbox_resources.cmake)
 else()
@@ -33,7 +34,7 @@ endif()
 # All of our pre-build steps
 add_custom_command(
     OUTPUT ${GLOBALS_C}
-    COMMAND ${PYTHON_EXE} -m cogapp -d -D symbols_fpath="${SYMBOLS_FILE}" -D project_root="${PROJECT_SOURCE_DIR}" -D embedded_resources="${EMBEDDED_RESOURCES_SEPARATED}" -o ${GLOBALS_C} ${GLOBALS_C_COG}
+    COMMAND ${PYTHON_EXE} -m cogapp -d -D symbols_fpath="${SYMBOLS_FILE}" -D project_root="${EMBEDDED_RESOURCES_PROJECT_ROOT}" -D embedded_resources="${EMBEDDED_RESOURCES_SEPARATED}" -o ${GLOBALS_C} ${GLOBALS_C_COG}
     DEPENDS ${SYMBOLS_FILE} ${GLOBALS_C_COG} ${GLOBALS_H} ${EMBEDDED_RESOURCES} ${PYTHON_EXE} ${COGAPP_DEPENDS}
 )
 

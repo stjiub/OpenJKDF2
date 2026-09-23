@@ -963,7 +963,8 @@ void sithCommand_HandleBinds(uint16_t key)
     {
         if (key == pBindIter->key) {
             strcpy(sithCommand_aTmpCommandExecute, pBindIter->pCmd);
-#ifdef QUAKE_CONSOLE
+            // Xbox omits the hardware-accelerated developer console.
+#ifndef TARGET_XBOX
             jkQuakeConsole_ExecuteCommand(sithCommand_aTmpCommandExecute);
 #endif
         }

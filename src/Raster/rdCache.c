@@ -1438,11 +1438,13 @@ int rdCache_TriCompare(const void* a_, const void* b_)
     tex_b = b->texture;
     tex_a = a->texture;
 
-    // Altered: subtracting the pointers is only defined within one array; between separate
-    //          allocations it yields an order that isn't antisymmetric, which walks qsort
-    //          off the array.
     if ( tex_a->is_16bit == tex_b->is_16bit )
+#ifdef TARGET_XBOX
+        // Altered: nxdk's qsort requires a strict order for separately allocated textures.
         return (uintptr_t)tex_a > (uintptr_t)tex_b ? 1 : ((uintptr_t)tex_a < (uintptr_t)tex_b ? -1 : 0);
+#else
+        return tex_a - tex_b;
+#endif
     else
         return tex_a->is_16bit != 0 ? 1 : -1;
 }
@@ -1458,11 +1460,13 @@ int rdCache_NGonCompare(const void* a_, const void* b_)
     tex_b = b->texture;
     tex_a = a->texture;
 
-    // Altered: subtracting the pointers is only defined within one array; between separate
-    //          allocations it yields an order that isn't antisymmetric, which walks qsort
-    //          off the array.
     if ( tex_a->is_16bit == tex_b->is_16bit )
+#ifdef TARGET_XBOX
+        // Altered: nxdk's qsort requires a strict order for separately allocated textures.
         return (uintptr_t)tex_a > (uintptr_t)tex_b ? 1 : ((uintptr_t)tex_a < (uintptr_t)tex_b ? -1 : 0);
+#else
+        return tex_a - tex_b;
+#endif
     else
         return tex_a->is_16bit != 0 ? 1 : -1;
 }
